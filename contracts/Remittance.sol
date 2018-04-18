@@ -1,4 +1,4 @@
-pragma solidity ^ 0.4.17;
+pragma solidity ^ 0.4.21;
 
 contract Remittance {
 
@@ -62,8 +62,10 @@ contract Remittance {
   RemittanceContract storage remittanceContract = remittances[keccak256(_recipienPassword , _exchangePassword)];
   require(remittanceContract.amount > 0); // Check reclaim contract is valid
   require(remittanceContract.exchage == msg.sender);
-  LogClaimed(remittanceContract.contractOwner, remittanceContract.recipient, msg.sender,  remittanceContract.amount);
-  msg.sender.transfer(remittanceContract.amount);
+  uint amount = remittanceContract.amount;
+  remittanceContract.amount = 0;
+  LogClaimed(remittanceContract.contractOwner, remittanceContract.recipient, msg.sender,  amount);
+  msg.sender.transfer(amount);
   return true;
   }
 
