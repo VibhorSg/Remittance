@@ -2,14 +2,13 @@ pragma solidity ^ 0.4.21;
 
 contract Remittance {
 
-  uint constant deadLineLimit = 999999;
+  uint constant deadLineLimit = 1000;
 
   address public owner;
   bool public isRunning;
 
   struct RemittanceContract {
     address contractOwner;
-    address recipient;
     address exchage;
     uint amount;
     uint endTime;
@@ -18,10 +17,8 @@ contract Remittance {
 
   mapping(bytes32 => RemittanceContract) public remittances;
 
-  event LogContractCreated(address indexed contractOwner,
-                           address indexed recipient, address indexed exchage,
-                           uint deadline, uint amount);
-  event LogClaimed(address indexed contractOwner,address indexed recipient, address indexed exchage, uint amount);                         
+  event LogContractCreated(address indexed contractOwner, address indexed exchage, uint deadline, uint amount);
+  event LogClaimed(address indexed contractOwner,address indexed exchage, uint amount);                         
   event LogReclaimed(address indexed contractOwner, uint amount);
   event LogPaused(address indexed owner);
   event LogResumed(address indexed owner);
@@ -36,23 +33,13 @@ contract Remittance {
     _;
   }
 
-  function createContract(string _puzzle, address _recipient, address _exchange,
-                          uint _deadline) public onlyIfRunning payable
+  function createContract(bytes32 _puzzle, address _exchange, uint _duration) public onlyIfRunning payable
   returns(bool) {
     require(msg.value > 0);
-    require(_recipient != address(0x00));
     require(_exchange != address(0x00));
-    require(_deadline <= deadLineLimit);
-
-    bytes32 contractOwnerPassword = keccak256(_puzzle, _recipient);
-    bytes32 exchagePassword = keccak256(contractOwnerPassword, _exchange);
-    bytes32 contrackKey =
-        keccak256(contractOwnerPassword, exchagePassword);
-
-    remittances[contrackKey] = RemittanceContract(
-        msg.sender, _recipient, _exchange, msg.value, _deadline + block.number, false);
-
-    emit LogContractCreated(msg.sender, _recipient, _exchange, _deadline, msg.value);
+    require(_duration <= deadLineLimit);
+    remittances[_puzzle] = RemittanceContract(msg.sender, _exchange, msg.value, _duration + block.number, false);
+    emit LogContractCreated(msg.sender, _exchange, _duration + block.number, msg.value);
     return true;
   }
 
@@ -64,15 +51,15 @@ contract Remittance {
   require(remittanceContract.exchage == msg.sender);
   uint amount = remittanceContract.amount;
   remittanceContract.amount = 0;
-  emit LogClaimed(remittanceContract.contractOwner, remittanceContract.recipient, msg.sender,  amount);
+  emit LogClaimed(remittanceContract.contractOwner, msg.sender,  amount);
   msg.sender.transfer(amount);
   return true;
   }
 
-  function reclaim(bytes32 _recipienPassword, bytes32 _exchangePassword) public onlyIfRunning
+  function reclaim(bytes32 _puzzle) public onlyIfRunning
   returns(bool) {
     require(msg.sender != address(0x00));
-    RemittanceContract storage remittanceContract = remittances[keccak256(_recipienPassword, _exchangePassword)];
+    RemittanceContract storage remittanceContract = remittances[_puzzle];
     require(remittanceContract.amount > 0); // Check reclaim contract is valid
     require(!remittanceContract.claimed);
     require(remittanceContract.contractOwner == msg.sender);
