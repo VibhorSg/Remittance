@@ -19,16 +19,16 @@ contract Remittance {
   mapping(bytes32 => RemittanceContract) public remittances;
 
   event LogContractCreated(address indexed contractOwner,
-                           address indexed recipient, address exchage,
-                           uint indexed deadline, uint amount);
+                           address indexed recipient, address indexed exchage,
+                           uint deadline, uint amount);
   event LogClaimed(address indexed contractOwner,address indexed recipient, address indexed exchage, uint amount);                         
-  event LogReclaimed(address indexed contractOwner,address indexed recipient, address exchage, uint amount);
-  event LogPaused();
-  event LogResumed();
+  event LogReclaimed(address indexed contractOwner, uint amount);
+  event LogPaused(address indexed owner);
+  event LogResumed(address indexed owner);
 
-  function Remittance() public {
+  function Remittance( bool _running ) public {
     owner = msg.sender;
-    isRunning = false;
+    isRunning = _running;
   }
 
   modifier onlyIfRunning {
@@ -45,14 +45,14 @@ contract Remittance {
     require(_deadline <= deadLineLimit);
 
     bytes32 contractOwnerPassword = keccak256(_puzzle, _recipient);
-    bytes32 exchagePassword = keccak256(_puzzle, _exchange);
+    bytes32 exchagePassword = keccak256(contractOwnerPassword, _exchange);
     bytes32 contrackKey =
         keccak256(contractOwnerPassword, exchagePassword);
 
     remittances[contrackKey] = RemittanceContract(
         msg.sender, _recipient, _exchange, msg.value, _deadline + block.number, false);
 
-    LogContractCreated(msg.sender, _recipient, _exchange, _deadline, msg.value);
+    emit LogContractCreated(msg.sender, _recipient, _exchange, _deadline, msg.value);
     return true;
   }
 
@@ -64,35 +64,33 @@ contract Remittance {
   require(remittanceContract.exchage == msg.sender);
   uint amount = remittanceContract.amount;
   remittanceContract.amount = 0;
-  LogClaimed(remittanceContract.contractOwner, remittanceContract.recipient, msg.sender,  amount);
+  emit LogClaimed(remittanceContract.contractOwner, remittanceContract.recipient, msg.sender,  amount);
   msg.sender.transfer(amount);
   return true;
   }
 
-  function reclaim(string _puzzle, address _recipient, address _exchange) public onlyIfRunning
+  function reclaim(bytes32 _recipienPassword, bytes32 _exchangePassword) public onlyIfRunning
   returns(bool) {
     require(msg.sender != address(0x00));
-    require(_exchange != address(0x00));
-    RemittanceContract storage remittanceContract = remittances[keccak256(keccak256(_puzzle,_recipient) , keccak256(_puzzle, _exchange))];
+    RemittanceContract storage remittanceContract = remittances[keccak256(_recipienPassword, _exchangePassword)];
     require(remittanceContract.amount > 0); // Check reclaim contract is valid
     require(!remittanceContract.claimed);
     require(remittanceContract.contractOwner == msg.sender);
-    require(remittanceContract.exchage == _exchange);
     require(remittanceContract.endTime > block.number);
     remittanceContract.claimed = true;
-    LogReclaimed(msg.sender, _recipient, _exchange,  remittanceContract.amount);
+    emit LogReclaimed(msg.sender, remittanceContract.amount);
     msg.sender.transfer(remittanceContract.amount);
   }
 
   function pause() public onlyIfRunning returns(bool) {
     require(msg.sender == owner);
-    LogPaused();
+    emit LogPaused(owner);
     isRunning = false;
   }
 
   function resume() public returns(bool) {
     require(msg.sender == owner);
-    LogResumed();
+    emit LogResumed(owner);
     isRunning = false;
   }
 
